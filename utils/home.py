@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+
+import requests
 import streamlit as st
 
 from utils.severe_thunderstorm_warning_counter import fetch_svr_warning_count_ytd
@@ -12,12 +15,18 @@ from utils.tornado_warning_counter import fetch_tor_warning_count_ytd
 
 @st.cache_data(ttl=900)
 def tor_count_cached(y):
-    return fetch_tor_warning_count_ytd(year=y)
+    try:
+        return fetch_tor_warning_count_ytd(year=y)
+    except (requests.RequestException, ValueError):
+        return "Unavailable"
 
 
 @st.cache_data(ttl=900)
 def svr_count_cached(y):
-    return fetch_svr_warning_count_ytd(year=y)
+    try:
+        return fetch_svr_warning_count_ytd(year=y)
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        return "Unavailable"
 
 
 def _render_spc_image(title: str, image_url: str | None, warning_text: str) -> None:
@@ -31,23 +40,38 @@ def _render_spc_image(title: str, image_url: str | None, warning_text: str) -> N
 def render(get_spc_location_percents):
     st.markdown(" # SPC Convective Outlooks")
 
+    lat = float(st.session_state.lat)
+    lon = float(st.session_state.lon)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        image_futures = {
+            "day1": executor.submit(get_day1_categorical_image_url),
+            "day2": executor.submit(get_day2_categorical_image_url),
+            "day3": executor.submit(get_day3_categorical_image_url),
+            "day4": executor.submit(get_day4_8_prob_image_url, 4),
+            "day5": executor.submit(get_day4_8_prob_image_url, 5),
+            "day6": executor.submit(get_day4_8_prob_image_url, 6),
+            "day7": executor.submit(get_day4_8_prob_image_url, 7),
+            "location": executor.submit(get_spc_location_percents, lat, lon),
+        }
+
     row1 = st.columns(3, gap="small")
     with row1[0]:
         _render_spc_image(
             "Day 1 Categorical",
-            get_day1_categorical_image_url(),
+            image_futures["day1"].result(),
             "Could not load the latest SPC Day 1 categorical outlook image.",
         )
     with row1[1]:
         _render_spc_image(
             "Day 2 Categorical",
-            get_day2_categorical_image_url(),
+            image_futures["day2"].result(),
             "Could not load the latest SPC Day 2 categorical outlook image.",
         )
     with row1[2]:
         _render_spc_image(
             "Day 3 Categorical",
-            get_day3_categorical_image_url(),
+            image_futures["day3"].result(),
             "Could not load the latest SPC Day 3 categorical outlook image.",
         )
 
@@ -57,34 +81,31 @@ def render(get_spc_location_percents):
     with row2[0]:
         _render_spc_image(
             "Day 4 Probability",
-            get_day4_8_prob_image_url(4),
+            image_futures["day4"].result(),
             "Could not load the SPC Day 4 probability outlook image.",
         )
     with row2[1]:
         _render_spc_image(
             "Day 5 Probability",
-            get_day4_8_prob_image_url(5),
+            image_futures["day5"].result(),
             "Could not load the SPC Day 5 probability outlook image.",
         )
     with row2[2]:
         _render_spc_image(
             "Day 6 Probability",
-            get_day4_8_prob_image_url(6),
+            image_futures["day6"].result(),
             "Could not load the SPC Day 6 probability outlook image.",
         )
     with row2[3]:
         _render_spc_image(
             "Day 7 Probability",
-            get_day4_8_prob_image_url(7),
+            image_futures["day7"].result(),
             "Could not load the SPC Day 7 probability outlook image.",
         )
 
     st.caption("Images are official SPC products. Day 4-8 is the experimental probabilistic suite; this view shows Day 4-7.")
 
-    nums = get_spc_location_percents(
-        float(st.session_state.lat),
-        float(st.session_state.lon)
-    )
+    nums = image_futures["location"].result()
 
     def fmt_prob(x):
         return "0%" if x is None else f"{int(x)}%"

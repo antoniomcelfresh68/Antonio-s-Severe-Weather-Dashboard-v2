@@ -8,39 +8,58 @@ def render() -> None:
         """
 ## Version
 
-Antonio's Severe Weather Dashboard v3 is a modular Streamlit application
-built for severe-weather situational awareness across the United States.
+Antonio's Severe Weather Dashboard v4.0.0 is a modular Streamlit application
+built for fast, location-aware severe-weather situational awareness across the United States.
 
 ## Overview
 
-The app consolidates official NOAA/NWS and SPC products into a single,
-fast interface with shared location state and cached API workflows.
+The dashboard brings together official NOAA/NWS, SPC, and GOES imagery into
+a single interface with shared location state, cached API workflows, and an
+updated visual design built around quick severe-weather scanning.
 
 ---
 
 ## Features
 
-- Nationwide severe ticker with exact-event filtering:
+- Nationwide severe alert ticker filtered to:
   - Tornado Warning
   - Severe Thunderstorm Warning
   - Tornado Watch
   - Severe Thunderstorm Watch
-- SPC Day 1-3 categorical and Day 4-7 probabilistic outlook imagery
-- Location-based SPC hazard percentages
-- Preset severe-weather city selection with optional device geolocation
-- Nearest radar auto-selection via NWS points API
-- Latest nearby NWS observations from the most complete station
+- Redesigned landing layout with live glance panels for:
+  - Temperature and dewpoint
+  - Year-to-date tornado and severe thunderstorm warning counts
+  - National SPC Day 1 summary with tornado, wind, and hail highlights
+- SPC Convective Outlooks page with:
+  - Day 1-3 categorical outlook imagery
+  - Day 4-7 probabilistic outlook imagery
+  - Location-based Day 1-2 tornado, wind, and hail percentages
+  - Day 3 probability at the selected location
+  - Conditional Intensity Group labels when applicable
+- Flexible location tools:
+  - City or street-address search
+  - Autosuggestions
+  - Browser device geolocation
+  - Local NWS office quick link
+- Observations page with:
+  - SPC mesoanalysis viewer
+  - Auto-selected nearby radar loops
+  - GOES satellite viewer with selectable satellite, sector, and product
+- Forecast page with:
+  - Styled forecast hero and trend callouts
+  - Hourly temperature and precipitation visualization
+  - Multi-period NOAA/NWS forecast cards
 
 ---
 
 ## Technical Architecture
 
-- Built with Streamlit
-- Modular `utils/` architecture
-- Cached NOAA/NWS API responses to reduce request load
-- Conditional page rendering for performance
-- Radar loops served from NWS RIDGE products
-- Ticker marquee implemented with CSS animation and seamless looping
+- Built with Streamlit and a modular `utils/` package structure
+- Shared NWS points metadata helper for forecasts, radar, observations, and local-office resolution
+- Cached NOAA/NWS, SPC, and geocoding requests to reduce latency and API load
+- Concurrent data fetching for top-level glance panels and SPC imagery
+- Share-link query parameter syncing plus lightweight local analytics event logging
+- Radar loops served from NWS RIDGE products and satellite imagery from NOAA NESDIS STAR
 
 ---
 
@@ -48,16 +67,15 @@ fast interface with shared location state and cached API workflows.
 
 - Meteorology portfolio application
 - Real-time severe weather situational awareness tool
-- Demonstration of operational API integration and modular app design
+- Demonstration of operational API integration, UI design, and modular app architecture
 
 ---
 
 ## Roadmap
 
-- Model Forecast page replacement
-- Expanded statistics and historical summaries
-- Additional observation layers
-- Deployment hardening and release tooling
+- Expanded historical severe-weather statistics and archive views
+- Additional observation and analysis layers
+- Release/versioning cleanup and deployment hardening
 """
     )
 

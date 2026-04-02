@@ -12,6 +12,7 @@ import requests
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import streamlit.components.v1 as components
+from utils.nws import get_nws_point_properties
 
 def apply_global_ui() -> None:
     st.markdown(
@@ -21,6 +22,9 @@ def apply_global_ui() -> None:
         :root {
             --font-body: 'Inter', sans-serif;
             --font-display: 'Montserrat', sans-serif;
+            --glance-text-muted: rgba(255, 238, 228, 0.74);
+            --glance-text-strong: rgba(255, 245, 240, 0.94);
+            --glance-number: #ff8f5a;
         }
 
         html, body, [data-testid="stAppViewContainer"] {
@@ -69,21 +73,99 @@ def apply_global_ui() -> None:
             font-size: clamp(1.12rem, 1.02rem + 0.46vw, 1.48rem);
         }
 
-        /* Navigation tabs */
-        div[data-baseweb="tab-list"] {
-            justify-content: center;
-            gap: 0.3rem;
-            margin-top: 0.2rem;
-            margin-bottom: 0.9rem;
+        /* Navigation card selector */
+        div[data-testid="stHorizontalBlock"]:has(.nav-card-anchor) {
+            gap: 0.7rem;
+            align-items: stretch;
+            margin: 0.55rem 0 1.6rem;
         }
 
-        button[data-baseweb="tab"] {
-            font-family: var(--font-body);
-            font-size: 1.05rem;
-            font-weight: 600;
-            letter-spacing: 0.45px;
-            padding: 0.7rem 1.28rem;
-            margin: 0 0.38rem;
+        div[data-testid="column"]:has(.nav-card-anchor) {
+            display: flex;
+            align-self: stretch;
+        }
+
+        div[data-testid="column"]:has(.nav-card-anchor) > div[data-testid="stVerticalBlock"] {
+            width: 100%;
+        }
+
+        .nav-card-anchor {
+            display: none;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor) {
+            width: 100%;
+            min-height: 112px;
+            padding: 1rem 1.05rem;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 170, 132, 0.2) !important;
+            background:
+                radial-gradient(circle at 18% 18%, rgba(255, 167, 99, 0.24), transparent 34%),
+                radial-gradient(circle at 85% 100%, rgba(173, 32, 36, 0.26), transparent 42%),
+                linear-gradient(155deg, rgba(20, 24, 32, 0.98), rgba(60, 13, 18, 0.96)) !important;
+            background-color: rgba(31, 18, 24, 0.96) !important;
+            color: rgba(255, 246, 241, 0.92) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.06),
+                inset 0 -1px 0 rgba(255, 120, 76, 0.08),
+                0 14px 24px rgba(0, 0, 0, 0.22),
+                0 0 0 1px rgba(255, 109, 58, 0.04) !important;
+            transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor):hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 166, 111, 0.5) !important;
+            background:
+                radial-gradient(circle at 18% 18%, rgba(255, 184, 111, 0.3), transparent 34%),
+                radial-gradient(circle at 85% 100%, rgba(202, 41, 44, 0.3), transparent 42%),
+                linear-gradient(155deg, rgba(24, 28, 37, 1), rgba(75, 16, 22, 0.98)) !important;
+            background-color: rgba(43, 20, 27, 0.98) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.09),
+                inset 0 -1px 0 rgba(255, 146, 94, 0.12),
+                0 18px 32px rgba(0, 0, 0, 0.3),
+                0 0 28px rgba(179, 36, 35, 0.14) !important;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor):focus:not(:active) {
+            border-color: rgba(255, 169, 132, 0.6) !important;
+            box-shadow:
+                0 0 0 0.18rem rgba(255, 119, 56, 0.18),
+                0 18px 32px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor) p {
+            font-family: var(--font-display);
+            font-size: 1.02rem;
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: 0.35px;
+            color: inherit !important;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor)[kind="primary"] {
+            border: 1px solid rgba(255, 188, 136, 0.9) !important;
+            background:
+                radial-gradient(circle at 18% 18%, rgba(255, 198, 118, 0.55), transparent 34%),
+                radial-gradient(circle at 86% 100%, rgba(255, 72, 52, 0.34), transparent 44%),
+                linear-gradient(160deg, rgba(111, 21, 19, 0.99), rgba(168, 36, 32, 0.97)) !important;
+            background-color: rgba(138, 31, 29, 0.98) !important;
+            color: #fffaf5 !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 246, 230, 0.2),
+                inset 0 -1px 0 rgba(255, 193, 121, 0.22),
+                0 22px 38px rgba(84, 7, 10, 0.42),
+                0 0 34px rgba(255, 102, 54, 0.24),
+                0 0 0 1px rgba(255, 168, 88, 0.14) !important;
+        }
+
+        div.stButton > button:has(+ .nav-card-anchor)[kind="primary"]:hover {
+            background:
+                radial-gradient(circle at 18% 18%, rgba(255, 216, 138, 0.62), transparent 34%),
+                radial-gradient(circle at 86% 100%, rgba(255, 87, 64, 0.4), transparent 44%),
+                linear-gradient(160deg, rgba(128, 27, 22, 1), rgba(189, 42, 35, 0.98)) !important;
+            background-color: rgba(158, 36, 31, 1) !important;
         }
 
         /* Metric numbers / data */
@@ -158,10 +240,6 @@ iframe {
             background: rgba(7, 13, 22, 0.95);
         }
         [data-testid="stAppViewContainer"] > .main {padding-top: 3.2rem;}
-        /* Active tab underline stronger */
-        button[data-baseweb="tab"][aria-selected="true"] {
-            border-bottom: 3px solid #841617;
-        }
 /* ============================= */
 /* Tornado Counter Metric Card  */
 /* ============================= */
@@ -220,6 +298,28 @@ div[data-testid="stMetricValue"] {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 10px 22px rgba(0, 0, 0, 0.35);
 }
 
+.glance-panel.compact{
+  gap: 0.28rem;
+  padding: 0.38rem 0.64rem;
+}
+
+.glance-panel.stats-panel{
+  gap: 0.24rem;
+  padding: 0.34rem 0.58rem;
+}
+
+.glance-panel.stats-panel .glance-loc{
+  font-size: 0.74rem;
+}
+
+.glance-panel.stats-panel .glance-time{
+  font-size: 0.78rem;
+}
+
+.glance-panel.stats-panel .glance-val{
+  font-size: 0.85rem;
+}
+
 .glance-loc{
   font-family: var(--font-body);
   font-size: 0.80rem;
@@ -227,7 +327,7 @@ div[data-testid="stMetricValue"] {
   font-weight: 700;
   letter-spacing: 0.3px;
   text-transform: none;
-  color: rgba(255,255,255,0.82);
+  color: var(--glance-text-muted);
 }
 
 .glance-time{
@@ -236,15 +336,15 @@ div[data-testid="stMetricValue"] {
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: rgba(255,255,255,0.92);
+  color: var(--glance-text-muted);
 }
 
 .glance-time.local{
-  color: #ffd166; /* warm highlight for local time */
+  color: var(--glance-text-muted);
 }
 
 .glance-time.zulu{
-  color: #8bd3ff; /* cool standardized tone for UTC/Zulu */
+  color: var(--glance-text-muted);
 }
 
 .glance-val{
@@ -253,12 +353,20 @@ div[data-testid="stMetricValue"] {
   line-height: 1;
   font-weight: 800;
   letter-spacing: 0.2px;
-  color: #ffffff;
+  color: var(--glance-text-strong);
   display: block;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.glance-label{
+  color: var(--glance-text-strong);
+}
+
+.glance-number{
+  color: var(--glance-number);
 }
 
 .glance-time{
@@ -267,22 +375,6 @@ div[data-testid="stMetricValue"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.glance-val.temp{
-  color: #ff8a65; /* warm temp convention */
-}
-
-.glance-val.dew{
-  color: #74d7ff; /* cool moisture convention */
-}
-
-.glance-val.wind{
-  color: #d7e9ff; /* neutral-cool wind tone */
-}
-
-.glance-val.cond{
-  color: #d2ffd2; /* readable condition accent */
 }
 
 @media (max-width: 900px) {
@@ -353,10 +445,13 @@ div[data-testid="stMetricValue"] {
         padding-right: 1.15rem;
         padding-top: 1rem;
     }
-    button[data-baseweb="tab"] {
-        font-size: 0.98rem;
-        margin: 0 0.16rem;
-        padding: 0.64rem 0.86rem;
+    div[data-testid="stHorizontalBlock"]:has(.nav-card-anchor) {
+        gap: 0.45rem;
+        flex-wrap: wrap;
+    }
+    div.stButton > button:has(+ .nav-card-anchor) {
+        min-height: 88px;
+        padding: 0.9rem 0.85rem;
     }
     div[data-testid="stMetricLabel"] {
         font-size: 20px;
@@ -397,19 +492,39 @@ def obs_small_card(title: str, value: str) -> None:
     """
     st.markdown(dedent(html), unsafe_allow_html=True)
 
+def render_nav_cards(options: list[str | tuple[str, str]], key: str = "nav") -> str:
+    normalized_options = [
+        (option, option) if isinstance(option, str) else option
+        for option in options
+    ]
+    valid_values = [value for _, value in normalized_options]
+
+    if key not in st.session_state or st.session_state[key] not in valid_values:
+        st.session_state[key] = valid_values[0]
+
+    def set_nav(option_value: str) -> None:
+        st.session_state[key] = option_value
+
+    cols = st.columns(len(normalized_options), gap="small")
+    for col, (label, value) in zip(cols, normalized_options):
+        with col:
+            is_active = st.session_state[key] == value
+            st.button(
+                label,
+                key=f"{key}_{value}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                on_click=set_nav,
+                args=(value,),
+            )
+            st.markdown('<div class="nav-card-anchor"></div>', unsafe_allow_html=True)
+
+    return st.session_state[key]
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _timezone_for_lat_lon(lat: float, lon: float) -> str:
     try:
-        r = requests.get(
-            f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}",
-            headers={
-                "User-Agent": "Antonio Severe Dashboard (contact: mcelfreshantonio@ou.edu)",
-                "Accept": "application/geo+json, application/json",
-            },
-            timeout=20,
-        )
-        r.raise_for_status()
-        tz_name = ((r.json() or {}).get("properties") or {}).get("timeZone")
+        tz_name = get_nws_point_properties(lat, lon).get("timeZone")
         if isinstance(tz_name, str) and tz_name:
             return tz_name
     except Exception:
@@ -450,8 +565,8 @@ def render_temp_dew_glance(
     <span class="glance-loc">{location_safe}</span>
     <span class="glance-time local" id="{local_id}">{local_initial}</span>
     <span class="glance-time zulu" id="{zulu_id}">{zulu_initial}</span>
-    <span class="glance-val temp">Temp: {fmt(temp_f)}</span>
-    <span class="glance-val dew">Dew Point: {fmt(dew_f)}</span>
+    <span class="glance-val"><span class="glance-label">Temp:</span> <span class="glance-number">{fmt(temp_f)}</span></span>
+    <span class="glance-val"><span class="glance-label">Dew Point:</span> <span class="glance-number">{fmt(dew_f)}</span></span>
   </div>
 </div>
 """
@@ -519,6 +634,46 @@ def render_wind_conditions_glance(wind_text: str, conditions_text: str) -> None:
 </div>
 """
     st.markdown(dedent(panel_html), unsafe_allow_html=True)
+
+def render_statistics_glance(year: int, tornado_count: int | str, severe_count: int | str) -> None:
+    tor_safe = html.escape(str(tornado_count))
+    svr_safe = html.escape(str(severe_count))
+    panel_html = f"""
+<div class="glance-panel-wrap">
+  <div class="glance-panel stats-panel" aria-label="Current yearly warning statistics">
+    <span class="glance-loc">Statistics</span>
+    <span class="glance-time local">YTD {year}</span>
+    <span class="glance-val"><span class="glance-label">Tornado Warnings:</span> <span class="glance-number">{tor_safe}</span></span>
+    <span class="glance-val"><span class="glance-label">Severe TSTM Warnings:</span> <span class="glance-number">{svr_safe}</span></span>
+  </div>
+</div>
+"""
+    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+
+
+def render_spc_day1_summary_glance(category: str, tornado: int | None, wind: int | None, hail: int | None) -> None:
+    def fmt_pct(value: int | None) -> str:
+        return "--" if value is None else f"{value}%"
+
+    category_safe = html.escape(category)
+    panel_html = f"""
+<div class="glance-panel-wrap">
+  <div class="glance-panel compact" aria-label="National SPC day 1 summary">
+    <span class="glance-loc">Today</span>
+    <span class="glance-val"><span class="glance-label">Greatest Risk:</span> <span class="glance-number">{category_safe}</span></span>
+    <span class="glance-val"><span class="glance-label">Tornado:</span> <span class="glance-number">{fmt_pct(tornado)}</span></span>
+    <span class="glance-val"><span class="glance-label">Wind:</span> <span class="glance-number">{fmt_pct(wind)}</span></span>
+    <span class="glance-val"><span class="glance-label">Hail:</span> <span class="glance-number">{fmt_pct(hail)}</span></span>
+  </div>
+</div>
+"""
+    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+
+def render_disclaimer_footer() -> None:
+    st.markdown("---")
+    st.caption(
+        "Disclaimer: This dashboard is a personal, experimental project and should not be used for official decision-making."
+    )
 
 def render_global_hero(
     image_path: str,

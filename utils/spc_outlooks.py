@@ -22,7 +22,7 @@ OUTLOOK_PAGE_URLS = {
     3: "https://www.spc.noaa.gov/products/outlook/day3otlk.html",
 }
 DAY4_8_IMAGE_BASE = "https://www.spc.noaa.gov/products/exper/day4-8"
-REQUEST_TIMEOUT = (5, 20)
+REQUEST_TIMEOUT = (3, 8)
 CACHE_TTL_SECONDS = 900
 
 

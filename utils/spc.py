@@ -1,6 +1,7 @@
 # utils/spc.py
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import streamlit as st
 from typing import List, Optional
@@ -8,6 +9,11 @@ from typing import List, Optional
 @st.cache_data(ttl=300, show_spinner=False)
 def get_spc_location_percents_cached(lat: float, lon: float) -> dict:
     return get_spc_location_percents(lat, lon)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_spc_day1_national_summary_cached() -> dict:
+    return get_spc_day1_national_summary()
 
 SPC_BASE = "https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer"
 
@@ -47,6 +53,7 @@ def find_layer_id(day_label: str, contains: str) -> Optional[int]:
                 return int(lyr["id"])
     return None
 
+@st.cache_data(ttl=300, show_spinner=False)
 def layer_geojson(layer_id: int) -> dict:
     url = f"{SPC_BASE}/{layer_id}/query"
     params = {
@@ -56,6 +63,7 @@ def layer_geojson(layer_id: int) -> dict:
         "f": "geojson",
     }
     return _get_json(url, params=params)
+
 
 def _point_in_ring(x: float, y: float, ring: list) -> bool:
     # ray casting
@@ -330,12 +338,28 @@ def get_spc_location_percents(lat: float, lon: float) -> dict:
     Day 1/2: tornado/wind/hail %
     Day 4–7: general probability %
     """
-    d1_tor = point_hazard_summary(lat, lon, "Day 1", "tornado")
-    d1_wind = point_hazard_summary(lat, lon, "Day 1", "wind")
-    d1_hail = point_hazard_summary(lat, lon, "Day 1", "hail")
-    d2_tor = point_hazard_summary(lat, lon, "Day 2", "tornado")
-    d2_wind = point_hazard_summary(lat, lon, "Day 2", "wind")
-    d2_hail = point_hazard_summary(lat, lon, "Day 2", "hail")
+    tasks = {
+        "d1_tor": ("Day 1", "tornado"),
+        "d1_wind": ("Day 1", "wind"),
+        "d1_hail": ("Day 1", "hail"),
+        "d2_tor": ("Day 2", "tornado"),
+        "d2_wind": ("Day 2", "wind"),
+        "d2_hail": ("Day 2", "hail"),
+    }
+
+    with ThreadPoolExecutor(max_workers=len(tasks) + 1) as executor:
+        futures = {
+            key: executor.submit(point_hazard_summary, lat, lon, day, hazard)
+            for key, (day, hazard) in tasks.items()
+        }
+        d3_future = executor.submit(point_day_prob, lat, lon, "Day 3")
+
+    d1_tor = futures["d1_tor"].result()
+    d1_wind = futures["d1_wind"].result()
+    d1_hail = futures["d1_hail"].result()
+    d2_tor = futures["d2_tor"].result()
+    d2_wind = futures["d2_wind"].result()
+    d2_hail = futures["d2_hail"].result()
 
     return {
         "d1_tor": d1_tor["percent"],
@@ -351,13 +375,49 @@ def get_spc_location_percents(lat: float, lon: float) -> dict:
         "d2_wind_cig": d2_wind["cig"],
         "d2_hail": d2_hail["percent"],
         "d2_hail_cig": d2_hail["cig"],
-        "d3_prob": point_day_prob(lat, lon, "Day 3"),
-
-        # keep your existing day4-7 general prob
-        "d4_prob": point_day_prob(lat, lon, "Day 4"),
-        "d5_prob": point_day_prob(lat, lon, "Day 5"),
-        "d6_prob": point_day_prob(lat, lon, "Day 6"),
-        "d7_prob": point_day_prob(lat, lon, "Day 7"),
+        "d3_prob": d3_future.result(),
     }
 
 
+def get_spc_day1_national_summary() -> dict:
+    """Return the highest Day 1 categorical risk and hazard percentages nationwide."""
+    category = "NONE"
+    category_rank = 0
+
+    categorical_layer_id = find_layer_id("Day 1", "Categorical")
+    if categorical_layer_id is not None:
+        gj = layer_geojson(categorical_layer_id)
+        for feat in gj.get("features", []) or []:
+            label = _extract_label(feat.get("properties", {}) or {}).upper()
+            rank = _CAT_RANK.get(label, 0)
+            if rank > category_rank:
+                category = label
+                category_rank = rank
+
+    def _hazard_best_percent(hazard: str) -> Optional[int]:
+        layer_id = DAY_HAZARD_LAYER_IDS.get("Day 1", {}).get(hazard)
+        if layer_id is None:
+            return None
+
+        best_percent = None
+        gj = layer_geojson(layer_id)
+        for feat in gj.get("features", []) or []:
+            pct = _extract_percent(feat.get("properties", {}) or {})
+            if pct is not None and (best_percent is None or pct > best_percent):
+                best_percent = pct
+        return best_percent
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        hazard_futures = {
+            hazard: executor.submit(_hazard_best_percent, hazard)
+            for hazard in ("tornado", "wind", "hail")
+        }
+
+    hazard_percents = {hazard: future.result() for hazard, future in hazard_futures.items()}
+
+    return {
+        "category": category,
+        "tornado": hazard_percents["tornado"],
+        "wind": hazard_percents["wind"],
+        "hail": hazard_percents["hail"],
+    }

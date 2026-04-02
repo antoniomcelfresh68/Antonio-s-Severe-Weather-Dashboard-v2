@@ -284,7 +284,7 @@ def get_severe_alerts(source: str, mode: str) -> List[Dict[str, Any]]:
     return fetch_us_severe_alerts()
 
 
-def fetch_us_severe_alerts(timeout: int = 10) -> List[Dict[str, Any]]:
+def fetch_us_severe_alerts(timeout: Tuple[int, int] = (3, 6)) -> List[Dict[str, Any]]:
     """Fetch active nationwide severe watch/warning alerts.
 
     Keeps only exact event matches:
@@ -308,7 +308,7 @@ def fetch_us_severe_alerts(timeout: int = 10) -> List[Dict[str, Any]]:
 def get_cached_severe_alerts_payload() -> Tuple[List[Dict[str, Any]], bool]:
     """Return (alerts, had_error)."""
     try:
-        resp = requests.get(NWS_ALERTS_URL, headers=HEADERS, timeout=10)
+        resp = requests.get(NWS_ALERTS_URL, headers=HEADERS, timeout=(3, 6))
         resp.raise_for_status()
         data = resp.json() or {}
         features = data.get("features", []) or []
