@@ -1,17 +1,19 @@
 # utils/ui.py
 
-from typing import Optional
-import streamlit as st
-from textwrap import dedent
 import base64
-import os
-import json
-import uuid
 import html
-import requests
+import json
+import os
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from textwrap import dedent
+from typing import Optional
 from zoneinfo import ZoneInfo
+
+import streamlit as st
 import streamlit.components.v1 as components
+
 from utils.nws import get_nws_point_properties
 
 def apply_global_ui() -> None:
@@ -282,15 +284,26 @@ div[data-testid="stMetricValue"] {
 .glance-panel-wrap{
   display: flex;
   justify-content: flex-start;
-  margin-top: 0.15rem;
-  margin-bottom: 0.2rem;
+  width: 100%;
+  margin: 0;
+}
+
+.hero-info-stack{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.8rem;
+  width: 100%;
 }
 
 .glance-panel{
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.34rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.46rem 0.74rem;
   border-radius: 14px;
   background: linear-gradient(130deg, rgba(16, 20, 26, 0.95), rgba(79, 10, 10, 0.88));
@@ -378,8 +391,11 @@ div[data-testid="stMetricValue"] {
 }
 
 @media (max-width: 900px) {
+  .hero-info-stack{
+    gap: 0.68rem;
+  }
   .glance-panel{
-    max-width: 240px;
+    max-width: none;
   }
 }
 /* ============================= */
@@ -492,6 +508,25 @@ def obs_small_card(title: str, value: str) -> None:
     """
     st.markdown(dedent(html), unsafe_allow_html=True)
 
+
+def _build_glance_panel_html(content_html: str, *, panel_class: str = "", aria_label: str) -> str:
+    class_name = "glance-panel"
+    if panel_class:
+        class_name = f"{class_name} {panel_class}"
+    return (
+        '<div class="glance-panel-wrap">'
+        f'<div class="{class_name}" aria-label="{html.escape(aria_label)}">'
+        f"{content_html}"
+        "</div></div>"
+    )
+
+
+def render_info_box_stack(boxes_html: list[str]) -> None:
+    if not boxes_html:
+        return
+    stack_html = '<div class="hero-info-stack">' + "".join(boxes_html) + "</div>"
+    st.markdown(dedent(stack_html), unsafe_allow_html=True)
+
 def render_nav_cards(options: list[str | tuple[str, str]], key: str = "nav") -> str:
     normalized_options = [
         (option, option) if isinstance(option, str) else option
@@ -538,6 +573,24 @@ def render_temp_dew_glance(
     lat: float,
     lon: float,
 ) -> None:
+    panel_html, local_id, zulu_id, tz_name = build_temp_dew_glance_panel(
+        location,
+        temp_f,
+        dew_f,
+        lat,
+        lon,
+    )
+    render_info_box_stack([panel_html])
+    mount_glance_clock(local_id, zulu_id, tz_name)
+
+
+def build_temp_dew_glance_panel(
+    location: str,
+    temp_f: Optional[float],
+    dew_f: Optional[float],
+    lat: float,
+    lon: float,
+) -> tuple[str, str, str, str]:
     def fmt(v: Optional[float]) -> str:
         if v is None:
             return "--"
@@ -559,18 +612,21 @@ def render_temp_dew_glance(
     zulu_id = f"glance-zulu-{uuid.uuid4().hex}"
     location_safe = html.escape(location)
 
-    panel_html = f"""
-<div class="glance-panel-wrap">
-  <div class="glance-panel" aria-label="Current local observations">
+    content_html = f"""
     <span class="glance-loc">{location_safe}</span>
     <span class="glance-time local" id="{local_id}">{local_initial}</span>
     <span class="glance-time zulu" id="{zulu_id}">{zulu_initial}</span>
     <span class="glance-val"><span class="glance-label">Temp:</span> <span class="glance-number">{fmt(temp_f)}</span></span>
     <span class="glance-val"><span class="glance-label">Dew Point:</span> <span class="glance-number">{fmt(dew_f)}</span></span>
-  </div>
-</div>
 """
-    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+    panel_html = _build_glance_panel_html(
+        dedent(content_html),
+        aria_label="Current local observations",
+    )
+    return panel_html, local_id, zulu_id, tz_name
+
+
+def mount_glance_clock(local_id: str, zulu_id: str, tz_name: str) -> None:
     components.html(
         f"""
 <script>
@@ -623,57 +679,91 @@ setInterval(updateClock, 1000);
     )
 
 def render_wind_conditions_glance(wind_text: str, conditions_text: str) -> None:
+    render_info_box_stack([build_wind_conditions_glance_panel(wind_text, conditions_text)])
+
+
+def build_wind_conditions_glance_panel(wind_text: str, conditions_text: str) -> str:
     wind_safe = html.escape((wind_text or "--").strip() or "--")
     cond_safe = html.escape((conditions_text or "--").strip() or "--")
-    panel_html = f"""
-<div class="glance-panel-wrap">
-  <div class="glance-panel" aria-label="Current wind and conditions">
+    content_html = f"""
     <span class="glance-val wind">Wind: {wind_safe}</span>
     <span class="glance-val cond">Current Conditions: {cond_safe}</span>
-  </div>
-</div>
 """
-    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+    return _build_glance_panel_html(
+        dedent(content_html),
+        aria_label="Current wind and conditions",
+    )
 
 def render_statistics_glance(year: int, tornado_count: int | str, severe_count: int | str) -> None:
+    render_info_box_stack([build_statistics_glance_panel(year, tornado_count, severe_count)])
+
+
+def build_statistics_glance_panel(year: int, tornado_count: int | str, severe_count: int | str) -> str:
     tor_safe = html.escape(str(tornado_count))
     svr_safe = html.escape(str(severe_count))
-    panel_html = f"""
-<div class="glance-panel-wrap">
-  <div class="glance-panel stats-panel" aria-label="Current yearly warning statistics">
+    content_html = f"""
     <span class="glance-loc">Statistics</span>
     <span class="glance-time local">YTD {year}</span>
     <span class="glance-val"><span class="glance-label">Tornado Warnings:</span> <span class="glance-number">{tor_safe}</span></span>
     <span class="glance-val"><span class="glance-label">Severe TSTM Warnings:</span> <span class="glance-number">{svr_safe}</span></span>
-  </div>
-</div>
 """
-    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+    return _build_glance_panel_html(
+        dedent(content_html),
+        panel_class="stats-panel",
+        aria_label="Current yearly warning statistics",
+    )
 
 
 def render_spc_day1_summary_glance(category: str, tornado: int | None, wind: int | None, hail: int | None) -> None:
-    def fmt_pct(value: int | None) -> str:
-        return "--" if value is None else f"{value}%"
+    render_info_box_stack([build_spc_day1_summary_glance_panel("Today", tornado, wind, hail)])
 
-    category_safe = html.escape(category)
-    panel_html = f"""
-<div class="glance-panel-wrap">
-  <div class="glance-panel compact" aria-label="National SPC day 1 summary">
-    <span class="glance-loc">Today</span>
-    <span class="glance-val"><span class="glance-label">Greatest Risk:</span> <span class="glance-number">{category_safe}</span></span>
-    <span class="glance-val"><span class="glance-label">Tornado:</span> <span class="glance-number">{fmt_pct(tornado)}</span></span>
-    <span class="glance-val"><span class="glance-label">Wind:</span> <span class="glance-number">{fmt_pct(wind)}</span></span>
-    <span class="glance-val"><span class="glance-label">Hail:</span> <span class="glance-number">{fmt_pct(hail)}</span></span>
-  </div>
-</div>
+
+def build_spc_day1_summary_glance_panel(
+    title: str,
+    tornado: int | None,
+    wind: int | None,
+    hail: int | None,
+) -> str:
+    def fmt_pct(value: int | None) -> str:
+        return "None" if value is None else f"{value}%"
+
+    title_safe = html.escape(str(title).strip() or "Location")
+    content_html = f"""
+    <span class="glance-loc">{title_safe}</span>
+    <span class="glance-val"><span class="glance-label">TOR -</span> <span class="glance-number">{fmt_pct(tornado)}</span></span>
+    <span class="glance-val"><span class="glance-label">WND -</span> <span class="glance-number">{fmt_pct(wind)}</span></span>
+    <span class="glance-val"><span class="glance-label">HAIL -</span> <span class="glance-number">{fmt_pct(hail)}</span></span>
 """
-    st.markdown(dedent(panel_html), unsafe_allow_html=True)
+    return _build_glance_panel_html(
+        dedent(content_html),
+        panel_class="compact",
+        aria_label="Location-based SPC day 1 summary",
+    )
 
 def render_disclaimer_footer() -> None:
     st.markdown("---")
     st.caption(
         "Disclaimer: This dashboard is a personal, experimental project and should not be used for official decision-making."
     )
+
+
+@st.cache_data(show_spinner=False)
+def _load_base64_asset(path: str, modified_ns: int) -> str:
+    # Cache local asset encoding so large hero images are not re-read on every rerun.
+    del modified_ns
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+
+def _load_base64_asset_if_exists(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+
+    asset_path = Path(path)
+    if not asset_path.exists():
+        return None
+
+    return _load_base64_asset(str(asset_path), asset_path.stat().st_mtime_ns)
 
 def render_global_hero(
     image_path: str,
@@ -682,14 +772,11 @@ def render_global_hero(
     version: str,
     logo_path: Optional[str] = None,
 ) -> None:
-
-    with open(image_path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("utf-8")
+    encoded = _load_base64_asset(image_path, Path(image_path).stat().st_mtime_ns)
 
     logo_html = ""
-    if logo_path and os.path.exists(logo_path):
-        with open(logo_path, "rb") as f:
-            logo_encoded = base64.b64encode(f.read()).decode("utf-8")
+    logo_encoded = _load_base64_asset_if_exists(logo_path)
+    if logo_encoded:
         logo_html = (
             f'<img class="hero-logo" src="data:image/png;base64,{logo_encoded}" '
             f'alt="{title} logo" />'

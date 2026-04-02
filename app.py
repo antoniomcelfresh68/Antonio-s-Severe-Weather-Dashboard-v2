@@ -7,7 +7,6 @@ import streamlit as st
 from utils.config import APP_TITLE
 from utils.state import init_state
 from utils.spc import (
-    get_spc_day1_national_summary_cached,
     get_spc_location_percents_cached as get_spc_location_percents,
 )
 import utils.home as home
@@ -18,12 +17,14 @@ from utils.observations import (
 import utils.about as about
 from utils.ui import (
     apply_global_ui,
+    build_spc_day1_summary_glance_panel,
+    build_statistics_glance_panel,
+    build_temp_dew_glance_panel,
+    mount_glance_clock,
     render_disclaimer_footer,
     render_global_hero,
+    render_info_box_stack,
     render_nav_cards,
-    render_spc_day1_summary_glance,
-    render_statistics_glance,
-    render_temp_dew_glance,
 )
 from utils.location import render_location_controls, sync_location_from_widget_state
 from utils.ticker import render_severe_ticker
@@ -64,36 +65,46 @@ with ThreadPoolExecutor(max_workers=4) as executor:
     )
     tor_future = executor.submit(tor_count_cached, current_year)
     svr_future = executor.submit(svr_count_cached, current_year)
-    spc_day1_future = executor.submit(get_spc_day1_national_summary_cached)
+    spc_location_future = executor.submit(
+        get_spc_location_percents,
+        float(st.session_state.lat),
+        float(st.session_state.lon),
+    )
 
 with top_left:
     temp_f, dew_f, _wind_text, _conditions_text = glance_future.result()
-    render_temp_dew_glance(
+    temp_panel_html, local_id, zulu_id, tz_name = build_temp_dew_glance_panel(
         st.session_state.city_key,
         temp_f,
         dew_f,
         float(st.session_state.lat),
         float(st.session_state.lon),
     )
-    render_statistics_glance(
+    stats_panel_html = build_statistics_glance_panel(
         current_year,
         tor_future.result(),
         svr_future.result(),
     )
-    day1_summary = spc_day1_future.result()
-    render_spc_day1_summary_glance(
-        day1_summary.get("category", "NONE"),
-        day1_summary.get("tornado"),
-        day1_summary.get("wind"),
-        day1_summary.get("hail"),
+    day1_summary = spc_location_future.result()
+    day1_panel_html = build_spc_day1_summary_glance_panel(
+        st.session_state.city_key,
+        day1_summary.get("d1_tor"),
+        day1_summary.get("d1_wind"),
+        day1_summary.get("d1_hail"),
     )
+    render_info_box_stack([
+        temp_panel_html,
+        stats_panel_html,
+        day1_panel_html,
+    ])
+    mount_glance_clock(local_id, zulu_id, tz_name)
 
 with top_center:
     render_global_hero(
         image_path="assets/banner.jpg",
         title=APP_TITLE,
         location=st.session_state.city_key,
-        version="v4.0.0",
+        version="v4.1.0",
         logo_path="assets/logo.png",
     )
 

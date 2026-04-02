@@ -332,6 +332,30 @@ def point_hazard_summary(lat: float, lon: float, day: str, hazard: str) -> dict:
 
     return {"percent": best_percent, "cig": best_cig}
 
+
+def get_day1_location_hazard_labels(location_summary: dict) -> list[str]:
+    hazard_keys = (
+        ("d1_tor", "Tornado"),
+        ("d1_wind", "Wind"),
+        ("d1_hail", "Hail"),
+    )
+    labels: list[str] = []
+    for key, label in hazard_keys:
+        if location_summary.get(key) is not None or location_summary.get(f"{key}_cig"):
+            labels.append(label)
+    return labels
+
+
+def get_day1_location_risk_summary(location_summary: dict) -> dict:
+    hazard_labels = get_day1_location_hazard_labels(location_summary)
+    if hazard_labels:
+        return {"hazards": hazard_labels, "message": None}
+
+    day1_cat = str(location_summary.get("day1_cat") or "NONE").upper()
+    if day1_cat == "TSTM":
+        return {"hazards": [], "message": "General thunderstorm risk only"}
+    return {"hazards": [], "message": "No specific hazard highlighted"}
+
 def get_spc_location_percents(lat: float, lon: float) -> dict:
     """
     v1-style numbers for the location.
@@ -353,6 +377,7 @@ def get_spc_location_percents(lat: float, lon: float) -> dict:
             for key, (day, hazard) in tasks.items()
         }
         d3_future = executor.submit(point_day_prob, lat, lon, "Day 3")
+        d1_cat_future = executor.submit(point_day1_3_category, lat, lon, "Day 1")
 
     d1_tor = futures["d1_tor"].result()
     d1_wind = futures["d1_wind"].result()
@@ -362,6 +387,7 @@ def get_spc_location_percents(lat: float, lon: float) -> dict:
     d2_hail = futures["d2_hail"].result()
 
     return {
+        "day1_cat": d1_cat_future.result(),
         "d1_tor": d1_tor["percent"],
         "d1_tor_cig": d1_tor["cig"],
         "d1_wind": d1_wind["percent"],

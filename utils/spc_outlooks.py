@@ -1,5 +1,6 @@
 import re
 import time
+from html import unescape
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import requests
@@ -24,6 +25,21 @@ OUTLOOK_PAGE_URLS = {
 DAY4_8_IMAGE_BASE = "https://www.spc.noaa.gov/products/exper/day4-8"
 REQUEST_TIMEOUT = (3, 8)
 CACHE_TTL_SECONDS = 900
+DAY_DETAIL_MAP_LABELS = {
+    1: [
+        ("tornado", "Tornado Probability"),
+        ("wind", "Wind Probability"),
+        ("hail", "Hail Probability"),
+    ],
+    2: [
+        ("tornado", "Tornado Probability"),
+        ("wind", "Wind Probability"),
+        ("hail", "Hail Probability"),
+    ],
+    3: [
+        ("probability", "Total Severe Probability"),
+    ],
+}
 
 
 def _with_cache_bust(url: str, bucket: int | None = None) -> str:
@@ -95,6 +111,89 @@ def _resolve_print_fallback(day: int) -> str | None:
     return None
 
 
+def _strip_tags(raw_html: str) -> str:
+    return re.sub(r"<[^>]+>", "", raw_html)
+
+
+def _normalize_discussion_text(raw_html: str) -> str:
+    text = unescape(_strip_tags(raw_html))
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _extract_discussion_text(html: str) -> str | None:
+    pre_blocks = re.findall(r"<pre[^>]*>(.*?)</pre>", html, flags=re.IGNORECASE | re.DOTALL)
+    if pre_blocks:
+        text = "\n\n".join(_normalize_discussion_text(block) for block in pre_blocks if block.strip())
+        return text.strip() or None
+
+    discussion_match = re.search(
+        r"Forecast Discussion(.*?)(?:NOTE:\s+THE NEXT DAY|\Z)",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not discussion_match:
+        return None
+    text = _normalize_discussion_text(discussion_match.group(1))
+    return text or None
+
+
+def _extract_updated_text(html: str) -> str | None:
+    match = re.search(r"Updated:\s*(.*?)\s*(?:\(|<)", html, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    updated = _normalize_discussion_text(match.group(1))
+    return updated or None
+
+
+def _extract_valid_text(discussion_text: str | None) -> str | None:
+    if not discussion_text:
+        return None
+    match = re.search(r"Valid\s+([^\n]+)", discussion_text)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def _extract_detail_maps(day: int, html: str, base_url: str) -> list[dict]:
+    maps: list[dict] = []
+
+    categorical_match = re.search(
+        rf'(?:src|href)="([^"]*day{day}otlk_[^"]+?_prt\.(?:png|gif))"',
+        html,
+        flags=re.IGNORECASE,
+    )
+    if categorical_match:
+        maps.append(
+            {
+                "key": "categorical",
+                "label": "Categorical Outlook",
+                "url": _with_cache_bust(urljoin(base_url, categorical_match.group(1))),
+                "primary": True,
+            }
+        )
+
+    for key, label in DAY_DETAIL_MAP_LABELS.get(day, []):
+        if day == 3 and key == "probability":
+            pattern = r'(?:src|href)="([^"]*day3[^"]*prob[^"]*_prt\.(?:png|gif))"'
+        else:
+            pattern = rf'(?:src|href)="([^"]*day{day}probotlk_[^"]*_{key}_prt\.(?:png|gif))"'
+
+        match = re.search(pattern, html, flags=re.IGNORECASE)
+        if match:
+            maps.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "url": _with_cache_bust(urljoin(base_url, match.group(1))),
+                    "primary": False,
+                }
+            )
+
+    return maps
+
+
 def _resolve_day_1_3_image(day: int) -> str | None:
     bucket = int(time.time() // CACHE_TTL_SECONDS)
     partner_url = f"{PARTNERS_BASE}/swody{day}.png"
@@ -128,3 +227,30 @@ def get_day4_8_prob_image_url(day: int) -> str | None:
     if _is_image_available(image_url):
         return _with_cache_bust(image_url, bucket)
     return None
+
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
+def get_day1_3_detail_payload(day: int) -> dict:
+    if day not in OUTLOOK_PAGE_URLS:
+        raise ValueError("day must be 1, 2, or 3")
+
+    page_url = OUTLOOK_PAGE_URLS[day]
+    page_html = _fetch_text(page_url)
+    print_page_url = _extract_print_page_url(day, page_html) or page_url
+    print_html = _fetch_text(print_page_url) if print_page_url != page_url else page_html
+
+    maps = _extract_detail_maps(day, print_html, print_page_url)
+    discussion = _extract_discussion_text(print_html)
+    updated = _extract_updated_text(page_html) or _extract_updated_text(print_html)
+    valid_period = _extract_valid_text(discussion)
+
+    return {
+        "day": day,
+        "title": f"Day {day} Severe Weather Details",
+        "page_url": page_url,
+        "print_page_url": print_page_url,
+        "updated": updated,
+        "valid_period": valid_period,
+        "maps": maps,
+        "discussion": discussion,
+    }

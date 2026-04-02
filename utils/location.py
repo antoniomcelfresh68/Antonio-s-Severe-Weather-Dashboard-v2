@@ -138,8 +138,6 @@ def sync_location_from_widget_state() -> None:
 
 def render_location_controls() -> None:
     """Render shared location controls: preset list + device geolocation."""
-    st.markdown("### Location")
-
     pending_search_value = st.session_state.pop("location_search_query_pending", None)
     if pending_search_value is not None:
         st.session_state["location_search_query"] = pending_search_value
@@ -147,6 +145,56 @@ def render_location_controls() -> None:
     st.markdown(
         """
         <style>
+        .location-controls {
+            margin: 0.2rem 0 0.55rem;
+        }
+        .location-controls-title {
+            margin: 0 0 0.38rem;
+            font-size: 1rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: rgba(255, 244, 239, 0.95);
+            letter-spacing: 0.01em;
+        }
+        .location-controls-meta {
+            margin: 0.38rem 0 0;
+            font-size: 0.84rem;
+            line-height: 1.35;
+            color: rgba(255, 233, 222, 0.76);
+        }
+        .location-controls-meta a {
+            color: rgba(255, 201, 168, 0.92);
+            text-decoration: none;
+        }
+        .location-controls-meta a:hover {
+            text-decoration: underline;
+        }
+        .location-controls-current {
+            margin: 0.2rem 0 0;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            color: rgba(255, 230, 218, 0.64);
+        }
+        .location-suggestions-label {
+            margin: 0.3rem 0 0.18rem;
+            font-size: 0.76rem;
+            line-height: 1.2;
+            color: rgba(255, 227, 214, 0.58);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        div[data-testid="stVerticalBlock"]:has(.location-controls-anchor) > [data-testid="element-container"] {
+            margin-bottom: 0.45rem;
+        }
+        div[data-testid="stVerticalBlock"]:has(.location-controls-anchor) [data-testid="stMarkdownContainer"] p {
+            margin-bottom: 0;
+        }
+        div[data-testid="stVerticalBlock"]:has(.location-controls-anchor) div.stButton > button {
+            min-height: 2.3rem;
+        }
+        div[data-testid="stVerticalBlock"]:has(.location-controls-anchor) div[data-testid="stTextInput"] label {
+            margin-bottom: 0.2rem;
+        }
         button[data-testid="stBaseButton-primary"] {
             border: 2px solid #ff2b2b !important;
             box-shadow: 0 0 7px rgba(255, 43, 43, 0.72), 0 0 18px rgba(255, 20, 20, 0.48) !important;
@@ -160,27 +208,31 @@ def render_location_controls() -> None:
         unsafe_allow_html=True,
     )
 
-    controls_col, _right_spacer = st.columns([2.1, 1.9], gap="small")
+    st.markdown('<div class="location-controls-anchor"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="location-controls">', unsafe_allow_html=True)
+    st.markdown('<div class="location-controls-title">Location</div>', unsafe_allow_html=True)
+
+    controls_col, _right_spacer = st.columns([2.25, 1.75], gap="small")
 
     with controls_col:
-        search_col, device_col = st.columns([1.7, 0.55], gap="small")
+        search_col, device_col = st.columns([1.7, 0.8], gap="small")
         with search_col:
             search_query = st.text_input(
                 "Search city or address",
                 key="location_search_query",
                 placeholder="Norman, OK or 120 David L Boren Blvd, Norman, OK",
+                label_visibility="collapsed",
             )
         with device_col:
-            st.markdown("<div style='height: 1.78rem;'></div>", unsafe_allow_html=True)
             use_device = st.button(
-                "Use location Device",
+                "Use Device",
                 use_container_width=True,
                 key="location_device_btn",
                 type="primary",
             )
 
-        search_btn_col, _spacer = st.columns([0.55, 1.7], gap="small")
-        with search_btn_col:
+        action_col, _spacer = st.columns([0.8, 1.7], gap="small")
+        with action_col:
             use_search = st.button(
                 "Search",
                 key="location_search_btn",
@@ -190,7 +242,7 @@ def render_location_controls() -> None:
         suggestions = geocode_location_suggestions(search_query)
         hide_suggestions = search_query.strip() == str(st.session_state.city_key).strip()
         if search_query.strip() and suggestions and not hide_suggestions:
-            st.caption("Suggestions")
+            st.markdown('<div class="location-suggestions-label">Suggestions</div>', unsafe_allow_html=True)
             for index, (label, lat, lon) in enumerate(suggestions):
                 if st.button(
                     label,
@@ -208,8 +260,12 @@ def render_location_controls() -> None:
         if office_url:
             location_label = str(st.session_state.city_key).split(",")[0].strip()
             st.markdown(
-                f"[Your Local NWS Office ({location_label})]({office_url})",
-                unsafe_allow_html=False,
+                (
+                    '<div class="location-controls-meta">'
+                    f'<a href="{office_url}">Local NWS Office ({location_label})</a>'
+                    "</div>"
+                ),
+                unsafe_allow_html=True,
             )
 
     if use_device:
@@ -250,6 +306,13 @@ def render_location_controls() -> None:
 
         st.info("Waiting for device location permission in your browser...")
 
-    st.caption(
-        f"Current: {st.session_state.city_key} ({float(st.session_state.lat):.4f}, {float(st.session_state.lon):.4f})"
+    st.markdown(
+        (
+            '<div class="location-controls-current">'
+            f'Current: {st.session_state.city_key} '
+            f'({float(st.session_state.lat):.4f}, {float(st.session_state.lon):.4f})'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
     )
+    st.markdown("</div>", unsafe_allow_html=True)
