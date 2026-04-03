@@ -1,7 +1,6 @@
 # app.py
 
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import UTC, datetime
 
 import streamlit as st
 from utils.config import APP_TITLE
@@ -57,23 +56,19 @@ sync_location_from_widget_state()
 
 top_left, top_center, top_right = st.columns([1.2, 3.6, 1.2], gap="large")
 
-current_year = datetime.utcnow().year
-with ThreadPoolExecutor(max_workers=4) as executor:
-    glance_future = executor.submit(
-        get_location_glance,
-        float(st.session_state.lat),
-        float(st.session_state.lon),
-    )
-    tor_future = executor.submit(tor_count_cached, current_year)
-    svr_future = executor.submit(svr_count_cached, current_year)
-    spc_location_future = executor.submit(
-        get_spc_location_percents,
-        float(st.session_state.lat),
-        float(st.session_state.lon),
-    )
+current_year = datetime.now(UTC).year
+temp_f, dew_f, _wind_text, _conditions_text = get_location_glance(
+    float(st.session_state.lat),
+    float(st.session_state.lon),
+)
+tor_count = tor_count_cached(current_year)
+svr_count = svr_count_cached(current_year)
+day1_summary = get_spc_location_percents(
+    float(st.session_state.lat),
+    float(st.session_state.lon),
+)
 
 with top_left:
-    temp_f, dew_f, _wind_text, _conditions_text = glance_future.result()
     temp_panel_html, local_id, zulu_id, tz_name = build_temp_dew_glance_panel(
         st.session_state.city_key,
         temp_f,
@@ -83,10 +78,9 @@ with top_left:
     )
     stats_panel_html = build_statistics_glance_panel(
         current_year,
-        tor_future.result(),
-        svr_future.result(),
+        tor_count,
+        svr_count,
     )
-    day1_summary = spc_location_future.result()
     day1_panel_html = build_spc_day1_summary_glance_panel(
         st.session_state.city_key,
         day1_summary.get("d1_tor"),
@@ -105,12 +99,12 @@ with top_center:
         image_path="assets/banner.jpg",
         title=APP_TITLE,
         location=st.session_state.city_key,
-        version="v4.1.1",
+        version="v4.2.0",
         logo_path="assets/logo.png",
     )
 
 with top_right:
-    st.empty()
+    render_assistant()
 
 render_location_controls()
 
@@ -127,7 +121,6 @@ nav = render_nav_cards(
 
 if nav == "Home":
     home.render(get_spc_location_percents=get_spc_location_percents)
-    render_assistant()
 
 elif nav == "Observations":
     render_observations()

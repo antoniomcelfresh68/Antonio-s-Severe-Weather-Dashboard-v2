@@ -8,7 +8,7 @@ def render() -> None:
         """
 ## Version
 
-Antonio's Severe Weather Dashboard v4.1.1 is a modular Streamlit application
+Antonio's Severe Weather Dashboard v4.2.0 is a modular Streamlit application
 built for fast, location-aware severe-weather situational awareness across the United States.
 
 ## Overview

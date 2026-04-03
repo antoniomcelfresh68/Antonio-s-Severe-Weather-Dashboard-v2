@@ -333,6 +333,14 @@ div[data-testid="stMetricValue"] {
   font-size: 0.85rem;
 }
 
+.glance-panel.stats-panel .glance-val.severe-storms{
+  font-size: 0.78rem;
+}
+
+.glance-panel.stats-panel .glance-val.severe-storms .glance-number{
+  font-size: 0.94em;
+}
+
 .glance-loc{
   font-family: var(--font-body);
   font-size: 0.80rem;
@@ -705,7 +713,7 @@ def build_statistics_glance_panel(year: int, tornado_count: int | str, severe_co
     <span class="glance-loc">Statistics</span>
     <span class="glance-time local">YTD {year}</span>
     <span class="glance-val"><span class="glance-label">Tornado Warnings:</span> <span class="glance-number">{tor_safe}</span></span>
-    <span class="glance-val"><span class="glance-label">Severe TSTM Warnings:</span> <span class="glance-number">{svr_safe}</span></span>
+    <span class="glance-val severe-storms"><span class="glance-label">Severe Thunderstorms:</span> <span class="glance-number">{svr_safe}</span></span>
 """
     return _build_glance_panel_html(
         dedent(content_html),
