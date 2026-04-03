@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timezone
 import math
 import streamlit.components.v1 as components
+from utils.ai_context import update_page_ai_context
 from utils.nws import get_nws_point_properties
 from utils.satelite import render_satellite_panel
 
@@ -244,6 +245,10 @@ def get_location_glance(lat: float, lon: float) -> Tuple[Optional[float], Option
 
 def render_spc_mesoanalysis() -> None:
     st.markdown(" # SPC Mesoanalysis")
+    update_page_ai_context(
+        "Observations",
+        selected_mesoanalysis_parameter=DEFAULT_MESO_PARAMETER,
+    )
     meso_url = _build_spc_meso_url(DEFAULT_MESO_SECTOR, DEFAULT_MESO_PARAMETER)
     components.iframe(meso_url, height=1000, scrolling=True)
 
@@ -253,6 +258,23 @@ def render():
     lat = float(st.session_state.lat)
     lon = float(st.session_state.lon)
     radar_id = _get_nearest_radar_id(lat, lon) or "KTLX"  # fallback for Oklahoma
+    obs, station_id = _get_nws_latest_obs_near_point(lat, lon)
+
+    update_page_ai_context(
+        "Observations",
+        radar_station=radar_id,
+        latest_observation={
+            "station_id": station_id,
+            "timestamp": (obs or {}).get("timestamp") if obs else None,
+            "temperature_c": _safe(obs or {}, "temperature", "value"),
+            "dewpoint_c": _safe(obs or {}, "dewpoint", "value"),
+            "relative_humidity_percent": _safe(obs or {}, "relativeHumidity", "value"),
+            "wind_direction_degrees": _safe(obs or {}, "windDirection", "value"),
+            "wind_speed_m_s": _safe(obs or {}, "windSpeed", "value"),
+            "wind_gust_m_s": _safe(obs or {}, "windGust", "value"),
+            "text_description": (obs or {}).get("textDescription") if obs else None,
+        },
+    )
 #    Cache-bust once per minute so the gif actually updates in browsers/CDNs
     bust = int(time.time() // 60)
     st.markdown(f" # Radar for {st.session_state.city_key} ({radar_id})")

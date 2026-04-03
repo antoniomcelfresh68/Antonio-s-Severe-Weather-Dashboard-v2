@@ -9,6 +9,7 @@ from matplotlib.colors import Normalize
 import pandas as pd
 import requests
 import streamlit as st
+from utils.ai_context import update_page_ai_context
 
 from utils.nws import get_nws_point_properties
 
@@ -793,6 +794,18 @@ def render() -> None:
 
     hourly_periods = forecast.get("hourly_periods") or []
     daily_periods = forecast.get("daily_periods") or []
+
+    update_page_ai_context(
+        "Forecast",
+        notes={
+            "hourly_period_count": len(hourly_periods),
+            "daily_period_count": len(daily_periods),
+            "source": "NOAA / api.weather.gov",
+        },
+        selected_model=None,
+        selected_model_run=None,
+        selected_forecast_hour=None,
+    )
 
     _render_hourly(hourly_periods)
     st.markdown("<div style='height: 0.35rem;'></div>", unsafe_allow_html=True)

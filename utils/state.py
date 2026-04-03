@@ -1,10 +1,13 @@
 # utils/state.py
 
 import streamlit as st
+from utils.ai_context import init_ai_context_state
 from utils.config import DEFAULT_CITY_KEY, CITY_PRESETS
 
 def init_state() -> None:
     ## Initialize the Streamlit session state with default values, ensures every page load has a consistent starting point.
+
+    init_ai_context_state()
 
     if "city_key" not in st.session_state:
         st.session_state.city_key = DEFAULT_CITY_KEY

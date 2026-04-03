@@ -6,3 +6,4 @@ matplotlib
 streamlit-js-eval
 PyYAML
 python-dateutil
+openai
